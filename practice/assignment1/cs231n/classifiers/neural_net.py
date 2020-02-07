@@ -79,8 +79,13 @@ class TwoLayerNet(object):
         # shape (N, C).                                                             #
         #############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+        l1mul = N @ W1 + b1 # N, H
+        l1relu = np.max(0, l1mul) # N, H
+        l2mul = l1relu @ W2 + b2 # N,  C
+        l2exp = np.exp(l2mul)
+        l2soft = l2exp / np.sum(l2exp, axis=1)
 
-        pass
+
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 

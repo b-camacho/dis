@@ -34,24 +34,24 @@ def softmax_loss_naive(W, X, y, reg):
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
     preds = X.dot(W)
-    cor = preds[np.arange(0, X.shape[0]), y]
+    epreds = np.exp(preds)
+    odds = epreds / np.expand_dims(np.sum(epreds, 1), 1)
+    cor = odds[np.arange(0, X.shape[0]), y]
+    logcor = np.log(cor)
+    loss = -np.sum(odds*np.expand_dims(logcor, 1)) / X.shape[0]
 
-    epreds = np.sum(np.exp(preds), 1)
-    ecor = np.exp(cor)
-    odds = ecor / epreds
-    logodds = np.log(odds)
-    loss = -np.sum(logodds) / X.shape[0]
 
-    dneg = 1/(-X.shape[0])
-    dlog = dneg * 1/odds
-    doddsecor = dlog * 1/epreds
-    doddsepreds = dlog * (-2) * ecor / np.square(epreds)
-    decor = doddsecor * np.exp(cor)
-    depreds = np.expand_dims(doddsepreds, 1) * np.exp(preds)
-    dcorpreds = np.zeros_like(preds)
-    dcorpreds[np.arange(0, X.shape[0]), y] = decor
-    dpredsW = X.T @ (depreds + dcorpreds)
-    dW = dpredsW + (reg * np.sum(W * W))
+    dneg = (-1) * (1/X.shape[0])
+    # dneg = 1/(-X.shape[0])
+    # dlog = dneg * 1/odds
+    # doddsecor = dlog * 1/epreds
+    # doddsepreds = dlog * (-2) * ecor / np.square(epreds)
+    # decor = doddsecor * np.exp(cor)
+    # depreds = np.expand_dims(doddsepreds, 1) * np.exp(preds)
+    # dcorpreds = np.zeros_like(preds)
+    # dcorpreds[np.arange(0, X.shape[0]), y] = decor
+    # dpredsW = X.T @ (depreds + dcorpreds)
+    # dW = dpredsW + (reg * np.sum(W * W))
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
