@@ -1,0 +1,80 @@
+\documentclass[12pt]{article}
+
+\title{Term Project}
+\author{Brian Camacho}
+
+
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{minted}
+\usepackage{float}
+\usepackage{amsmath}
+\setminted{fontsize=\footnotesize}
+\usepackage[left=2cm, right=2cm, top=3cm, paper=a4paper]{geometry}
+\usepackage{color}
+
+\newcommand{\source}[1]{\tiny\caption*{Source: {#1}} }
+\newcommand{\Loss}{\mathcal{L}}
+\begin{document}
+
+\maketitle
+
+\newpage
+\pagenumbering{arabic}
+
+\section{Literature Review}
+The chapter begins with an overview of state of the art Facial Recognition methods, including a brief explanation of general Computer Vision and Facial Recognition.
+Then, Neural Network approximation and Artificial Intelligence acceleration techniques are discussed, with a focus on Convolutional Neural Networks and Field-Programmable Gate Arrays. This includes an  examination of benchmarking methods, and mostly discusses improvements to inference, as opposed to training.
+\subsection{Computer Vision}
+Computer Vision, that is, using software to recognise objects in images, is a difficult problem. Image data is unstructured, high-dimensional and subtle differences in pixel values can completely change the object represented\cite{prince2012computer}.
+Historically, distilling information from such data required experts to craft complex feature extractors, which generalised poorly to a large number of classes.
+\subsubsection{Convolutional Neural Networks}
+The seminal 2012 paper by Kirzhevsky et al. used Convolutional Neural Network to achieve an mAP of 16\% in the Imagenet Large Scale Visual Recognition Challenge, compared to the second-best submission with an mAP of 26\%\cite{ILSVRC15}.
+CNNs have since become the standard in computer vision tasks \cite{sze2017efficient}, including Facial Recognition.
+Usual network architectures start with a number of Convolutional, Pooling and Activation layers which serve as feature extractors and turn a vector $v \in R^{W\times H}$, representing a $W\times H$ image, into an internal vector embedding $x \in R^D$, where $D << WxH$, followed by a final regression/classification layer.
+\subsubsection{Facial Recognition}
+If our goal is only recognising faces known at training time, Facial Recognition simplifies into a classification problem. This is called closed-set FR.
+The converse case is called open-set FR, where we work with identities which do not belong to the training set.
+Not only is open-set FR more challenging, but also more applicable in practice \cite{liu2017sphereface}.
+In normal classification, the learned vector embeddings need only to be separable by the final classification (eg. softmax) layer.
+Open-set FR, however, embedding to also be discriminative --- where we can expect the nearest neighbour of an embedding to represent the same class. In other words, we need small intra-class distances and large inter-class distances\cite{deng2019arcface}.
+Parkhi et al\cite{parkhi2015deep} tackle this by treating initial CONV layers as a feature extractor, and then replacing the softmax classifier head with a regression head based on $(x_{Anchor}, x_{Positive}, x_{Negative})$ embedded face triplets, with loss $\Loss$ $$\Loss = max(0, |x_{Anchor} - x_{Positive}| - |x_{Anchor} - x_{Negative}|)$$
+Authors of SphereFace\cite{liu2017sphereface} take a different approach to the same problem, by defining an Angular Softmax function, encouraging a discriminative distribution of classes, with an adjustable margin hyperparameter $m$.
+Given 2 weight vectors $W_1, W_2$, and the angle between them $\theta$, we can enforce an angular margin of $\frac{m-1}{m+1}\theta$ \cite{li2018angular}.
+Finally, Deng et. al synthesise different margin incorporating loss functions, producing state of the art results with an additive (as opposed to multiplicative in SphereFace) penalty\cite{deng2019arcface}.
+\subsection{Deep Neural Network Acceleration}
+\subsubsection{Training vs Inference}
+Like all ML methods, DNNs have to be trained on data before they can be used in inference. Training is composed of 2 stages --- Forward and Backward pass.
+In forward pass, the input vector $x$ is transformed by layers $L_1, L_2,..., L_n$  in sequence, then compared to target $y$ to compute loss $\Loss$:
+\begin{gather}
+\begin{split}
+    o &= L_n( ... L_2(L_1(v)) ... )\\
+    \Loss &= f(o, y) 
+\end{split}
+\end{gather}
+The symbolic gradients $\frac{\partial \Loss}{\partial W_i}$ for each layer weights $W_i$ are computed ahead of time as:
+\begin{gather}
+\begin{split}
+    \frac{\partial \Loss}{\partial W_n} &= \frac{\partial f(o, y)}{\partial W_n}\\
+    \frac{\partial \Loss}{\partial W_i} &= \frac{\Loss}{\partial L_{i+1}} * \frac{\partial L_{i+1}}{\partial W_i}
+\end{split}
+\end{gather}
+Importantly, the symbolic gradients have to be evaluated at their respective inputs which, in turn, need to be stored during forward pass.
+In inference, however, only the forward pass is computed, and there is no need to store intermediate input values or calculate loss, creating more opportunities for optimisation.
+This work focuses on optimising the forward pass.
+
+\subsubsection{CPU and GPU}
+Most computation in Deep Neural Networks is expressed in terms of matricies of Floating Point numbers, processed in multiply-and-accumulate operations.
+These are trivially parallelisable, and can benefit from highly parallel compute paradigms\cite{sze2017efficient}.
+On both CPU and GPU, Single Instruction Multiple Data and Single Instruction Multiple Thread can be leveraged via existing Basic Linear Algebra Subprograms libraries.
+There also exist a number
+
+\section{Problem Analysis}
+\section{Design and Implementation}
+\section{Evaluation}
+\section{Conclusion}
+\bibliography{bibliography}
+\bibliographystyle{ieeetr}
+\end{document}
