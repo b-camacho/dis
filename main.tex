@@ -15,6 +15,7 @@
 
 \newcommand{\source}[1]{\tiny\caption*{Source: {#1}} }
 \newcommand{\Loss}{\mathcal{L}}
+\newcommand{\Fourier}{\mathcal{F}}
 \begin{document}
 
 \maketitle
@@ -74,11 +75,13 @@ state of the art results with an additive (as opposed to multiplicative in Spher
 penalty\cite{deng2019arcface}.
 
 \subsection{Deep Neural Network Acceleration}
+\subsubsection{Roofline Model}
+
 
 \subsubsection{Training vs Inference}
 Like all ML methods, DNNs have to be trained on data before they can be used in inference. Training
-is composed of 2 stages --- Forward and Backward pass.
-In forward pass, the input vector $x$ is transformed by layers $L_1, L_2,..., L_n$  in sequence,
+is composed of 2 stages --- Forward and Backward propagation.
+In forward propagation, the input vector $x$ is transformed by layers $L_1, L_2,..., L_n$  in sequence,
 then compared to target $y$ to compute loss $\Loss$:
 \begin{gather}
 \begin{split}
@@ -96,20 +99,68 @@ are computed ahead of time as:
 \end{split}
 \end{gather}
 Importantly, the symbolic gradients have to be evaluated at their respective inputs which,
-in turn, need to be stored during forward pass.
-In inference, however, only the forward pass is computed, and there is no need to store
+in turn, need to be stored during forward propagation.
+In inference, however, only forward propagation is computed, and there is no need to store
 intermediate input values or calculate loss, creating more opportunities for optimisation.
-This work focuses on optimising the forward pass.
+This work focuses on optimising forward propagation.
 
 
-\subsubsection{CPU and GPU}
+\subsubsection{Vectorisation}
 Most computation in Deep Neural Networks is expressed in terms of matricies of Floating Point
 numbers, processed in multiply-and-accumulate operations.
 These are trivially parallelisable, and can benefit from highly parallel compute
 paradigms\cite{sze2017efficient}.
 On both CPU and GPU, Single Instruction Multiple Data and Single Instruction Multiple Thread
 can be leveraged via existing Basic Linear Algebra Subprograms libraries.
-There also exist a number
+
+\subsubsection{Accelerating Convolution}
+The initial convolutional layers use most resources (both memory and compute) in a CNN \cite{karpathy2015cs231n},
+making convolution the most lucrative target for optimisation.
+Mapping the input matrix into a Toeplitz Matrix, and unwinding the convolutional filter into a vector,
+lets us represent the complex convolution operation as a much simple matrix vector multiplication. This 
+comes at the expense of duplicating input data \cite{sze2017efficient}
+
+The Convolution Theorem states that an elementwise multiplication of fourier-transformed kernel and input is equivalent to a convolution of their non-transformed counterparts, more precisely:
+\begin{gather}
+	f * g = \Fourier^{-1}(\Fourier(f) \cdot \Fourier(g))
+\end{gather}
+where $*$ denotes convolution.
+Computational complexity of "naively" convolving a $C \times W_i \times H_i$ input with a $C \times W_k \times H_k$ kernel is $O(CW_iH_iW_kH_k)$.
+Applying Fast Fourier Transform to the input, then doing elementwise multiplication followed by inverse FFT, has complexity
+$$O(CH_iW_ilog(W_iH_i) + 4CW_iH_i + W_iH_i)$$
+Which represent the log-linear complixity of FFT, then the cost of piecewise multiplying 2 complex matricies,
+then inverse FFT on the now 1-channel feature map. The speedup obtained from this approach diminishes when $W_k, H_k << W_i, H_i$\cite{liu2016pruning}.
+The Winograd convolution addresses this, outperforming FFT on small kernels.
+The 2 approaches can be synthesised in a single network, applying Winograd/FFT to different convolutional layers depending on kernel size \cite{zhuge2018face}
+
+Spatial factorisation has been used to drastically improve efficiency of convolution kernels, for instance the edge-detecting Sobel kernel.
+An $W_k \times H_k$ kernel is factorised into a $1 \times W_k$ and $H_k \times 1$ vectors, which are applied to the image in sequence.
+For some kernels, this is $O(W_iH_i(W_k + H_k))$ operation is equivalent to the $O(W_iH_iW_kH_k)$ 2D convolution.
+Unfortunately, only a small subset of kernels are spatially separable (specifically, kernels whose column vectors are all the same vector multiplied by a scalar).
+In depthwise separable convolutions, we use a similar approach, where convolving a $W_i \times H_i \times C$ image with $D$ kernels of size $W_k \times H_k \times C$ is decomposed into 2 stages.
+First, each input channel is convolved with a $W_k \times H_l \times 1$.
+The resulting intermediate feature map is then pointwise convolved with $D$ $1 \times 1 \times C$ kernels.
+Space and compute savings here stem from reusing the same $W_k \times H_k \times 1$ kernel for all of the pointwise kernels.
+This approach was introduced in \cite{howard2017mobilenets} and achieved state of the art results.
+
+\subsubsection{Block Floating Point}
+
+\subsubsection{Quantisation}
+Binarization
+  MAC as XNOR+POPCNT
+  can't do 0
+Ternarisation
+Fine Grained Quantisation
+Logarithmic Quantisation
+  Range more important than precision
+\subsubsection{Weight Reduction}
+Pruning
+  irregular structure difficult to represent
+Slimming
+
+\subsubsection{Input-Dependent Computation}
+
+
 
 \section{Problem Analysis}
 
