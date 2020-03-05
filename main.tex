@@ -30,6 +30,11 @@ Then, Neural Network approximation and Artificial Intelligence acceleration tech
 discussed, with a focus on Convolutional Neural Networks and Field-Programmable Gate Arrays. This
 includes an  examination of benchmarking methods, and mostly discusses improvements to inference,
 as opposed to training.
+\subsection{Field Programmable Gate Arrays}
+\subsubsection{Comparison with CPU, GPU and ASIC}
+
+\subsubsection{Roofline Model}
+\subsubsection{Hybrid Architecture}
 
 \subsection{Computer Vision}
 Computer Vision, that is, using software to recognise objects in images, is a difficult
@@ -146,17 +151,29 @@ This approach was introduced in \cite{howard2017mobilenets} and achieved state o
 \subsubsection{Block Floating Point}
 
 \subsubsection{Quantisation}
-Binarization
-  MAC as XNOR+POPCNT
-  can't do 0
-Ternarisation
-Fine Grained Quantisation
-Logarithmic Quantisation
-  Range more important than precision
+In training, most DCNNs use 32 Floating Point numbers to represent weights, activations and inputs.
+Not all of this precision is needed in a forward pass, however.
+In BinaryNet, for all layers except the first, weights and activation are quantised to $\{-1, 1\}$, represented with unset and set bits respectively.
+Surprisingly, authors note only a small accuracy loss on small networks\cite{courbariaux2016binarynet}, but a much larger (~30\%) on large networks \cite{wang2019deep}.
+When the accuracy loss is acceptable, this approach massively accelerates computation, as the expensive FP32 matrix-vector product operations can be replaced with an XNOR and POPCOUNT\cite{courbariaux2016binarynet}.
+The benefits are especially visible in flexible architectures (ASIC/FPGA).
+The accuracy loss can be compensated for by expanding the binarized network.
+Umuroglu at al. speculate BNNs need to be expanded 2-11x to eliminate accuracy loss \cite{umuroglu2016finn},
+but use MNIST as the experimental dataset, which does not capture the more significant accuracy loss for large networks.
+
+Notably, binarized neurons are unable do deactivate. Ternarisation overcomes this by quantising values to $\{-1, 0, 1\}$.
+Another notable variation is Trained Ternary Weights, where we learn a weight $w$ from data, and quantise to $\{-w, 0 ,w\}$.
+This approach can naturally be extended to arbitrary-bitwidth quantisation.
+
+In Fine Grained Quantisation, we choose different quantisation for different parts of the network.
+Ideally, we could quantise each weight/activation with the best ratio of performance benefit to accuracy loss,
+but this significantly complicates the architectures.
+Instead \cite{wu2016quantized} paritions the network into a number of quantisation domains with kmeans.
+
+Authors of LogNet\cite{lee2017lognet} use logarithmically quantised 4bit weights to drastically outperform the usual, linearly quantised alternative.
+This suggest the maximum expressible range of an activation is more important than precision in preserving DCNN performance.
+
 \subsubsection{Weight Reduction}
-Pruning
-  irregular structure difficult to represent
-Slimming
 
 \subsubsection{Input-Dependent Computation}
 
