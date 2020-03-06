@@ -10,7 +10,7 @@
 \usepackage{caption}
 \usepackage{float}
 \usepackage{amsmath}
-	
+
 \usepackage{color}
 
 \newcommand{\source}[1]{\tiny\caption*{Source: {#1}} }
@@ -81,12 +81,22 @@ penalty\cite{deng2019arcface}.
 
 \subsection{Deep Neural Network Acceleration}
 \subsubsection{Roofline Model}
-
+The Roofline Model is used in benchmarking deep neural networks in a way that generalised well
+to real-world applications.
+Attainable performance $P$ is expressed as $$P = min(\pi, \beta * I)$$ where $\pi$, $\beta$
+and $I$ represent peak compute power, peak bandwidth and operational intensity, respectively.
+RM accurately represents performanece being either compute- or memory-bound, where additional
+compute power will not improve performance if data is already read from memory as fast as
+possible, and vice versa.
+Operational intensity represents how much computation is performed for each byte read from memory.
+For instance by reusing parameters in different layers, we can improve performance even if the
+process is memory bound.
 
 \subsubsection{Training vs Inference}
 Like all ML methods, DNNs have to be trained on data before they can be used in inference. Training
 is composed of 2 stages --- Forward and Backward propagation.
-In forward propagation, the input vector $x$ is transformed by layers $L_1, L_2,..., L_n$  in sequence,
+In forward propagation, the input vector $x$ is transformed by layers $L_1, L_2,..., L_n$
+in sequence,
 then compared to target $y$ to compute loss $\Loss$:
 \begin{gather}
 \begin{split}
@@ -119,66 +129,111 @@ On both CPU and GPU, Single Instruction Multiple Data and Single Instruction Mul
 can be leveraged via existing Basic Linear Algebra Subprograms libraries.
 
 \subsubsection{Accelerating Convolution}
-The initial convolutional layers use most resources (both memory and compute) in a CNN \cite{karpathy2015cs231n},
+The initial convolutional layers use most resources (both memory and compute) in a CNN
+\cite{karpathy2015cs231n},
 making convolution the most lucrative target for optimisation.
-Mapping the input matrix into a Toeplitz Matrix, and unwinding the convolutional filter into a vector,
-lets us represent the complex convolution operation as a much simple matrix vector multiplication. This 
+Mapping the input matrix into a Toeplitz Matrix, and unwinding the convolutional filter into
+a vector,
+lets us represent the complex convolution operation as a much simple matrix vector
+multiplication. This
 comes at the expense of duplicating input data \cite{sze2017efficient}
 
-The Convolution Theorem states that an elementwise multiplication of fourier-transformed kernel and input is equivalent to a convolution of their non-transformed counterparts, more precisely:
+The Convolution Theorem states that an elementwise multiplication of fourier-transformed kernel
+and input is equivalent to a convolution of their non-transformed counterparts, more precisely:
 \begin{gather}
 	f * g = \Fourier^{-1}(\Fourier(f) \cdot \Fourier(g))
 \end{gather}
 where $*$ denotes convolution.
-Computational complexity of "naively" convolving a $C \times W_i \times H_i$ input with a $C \times W_k \times H_k$ kernel is $O(CW_iH_iW_kH_k)$.
-Applying Fast Fourier Transform to the input, then doing elementwise multiplication followed by inverse FFT, has complexity
+Computational complexity of "naively" convolving a $C \times W_i \times H_i$ input with a $C
+\times W_k \times H_k$ kernel is $O(CW_iH_iW_kH_k)$.
+Applying Fast Fourier Transform to the input, then doing elementwise multiplication followed
+by inverse FFT, has complexity
 $$O(CH_iW_ilog(W_iH_i) + 4CW_iH_i + W_iH_i)$$
-Which represent the log-linear complixity of FFT, then the cost of piecewise multiplying 2 complex matricies,
-then inverse FFT on the now 1-channel feature map. The speedup obtained from this approach diminishes when $W_k, H_k << W_i, H_i$\cite{liu2016pruning}.
+Which represent the log-linear complixity of FFT, then the cost of piecewise multiplying 2
+complex matricies,
+then inverse FFT on the now 1-channel feature map. The speedup obtained from this approach
+diminishes when $W_k, H_k << W_i, H_i$\cite{liu2016pruning}.
 The Winograd convolution addresses this, outperforming FFT on small kernels.
-The 2 approaches can be synthesised in a single network, applying Winograd/FFT to different convolutional layers depending on kernel size \cite{zhuge2018face}
+The 2 approaches can be synthesised in a single network, applying Winograd/FFT to different
+convolutional layers depending on kernel size \cite{zhuge2018face}
 
-Spatial factorisation has been used to drastically improve efficiency of convolution kernels, for instance the edge-detecting Sobel kernel.
-An $W_k \times H_k$ kernel is factorised into a $1 \times W_k$ and $H_k \times 1$ vectors, which are applied to the image in sequence.
-For some kernels, this is $O(W_iH_i(W_k + H_k))$ operation is equivalent to the $O(W_iH_iW_kH_k)$ 2D convolution.
-Unfortunately, only a small subset of kernels are spatially separable (specifically, kernels whose column vectors are all the same vector multiplied by a scalar).
-In depthwise separable convolutions, we use a similar approach, where convolving a $W_i \times H_i \times C$ image with $D$ kernels of size $W_k \times H_k \times C$ is decomposed into 2 stages.
+Spatial factorisation has been used to drastically improve efficiency of convolution kernels,
+for instance the edge-detecting Sobel kernel.
+An $W_k \times H_k$ kernel is factorised into a $1 \times W_k$ and $H_k \times 1$ vectors,
+which are applied to the image in sequence.
+For some kernels, this is $O(W_iH_i(W_k + H_k))$ operation is equivalent to the $O(W_iH_iW_kH_k)$
+2D convolution.
+Unfortunately, only a small subset of kernels are spatially separable (specifically, kernels
+whose column vectors are all the same vector multiplied by a scalar).
+In depthwise separable convolutions, we use a similar approach, where convolving a $W_i \times
+H_i \times C$ image with $D$ kernels of size $W_k \times H_k \times C$ is decomposed into 2 stages.
 First, each input channel is convolved with a $W_k \times H_l \times 1$.
-The resulting intermediate feature map is then pointwise convolved with $D$ $1 \times 1 \times C$ kernels.
-Space and compute savings here stem from reusing the same $W_k \times H_k \times 1$ kernel for all of the pointwise kernels.
+The resulting intermediate feature map is then pointwise convolved with $D$ $1 \times 1 \times
+C$ kernels.
+Space and compute savings here stem from reusing the same $W_k \times H_k \times 1$ kernel for
+all of the pointwise kernels.
 This approach was introduced in \cite{howard2017mobilenets} and achieved state of the art results.
 
 \subsubsection{Block Floating Point}
+The IEEE 754 Floating Point representation uses 8 exponent bits to represent the position of
+the binary point.
+Instead of storing the exponent separately for each weight, they can be grouped by layer
+\cite{courbariaux2014training}.
 
 \subsubsection{Quantisation}
 In training, most DCNNs use 32 Floating Point numbers to represent weights, activations and inputs.
 Not all of this precision is needed in a forward pass, however.
-In BinaryNet, for all layers except the first, weights and activation are quantised to $\{-1, 1\}$, represented with unset and set bits respectively.
-Surprisingly, authors note only a small accuracy loss on small networks\cite{courbariaux2016binarynet}, but a much larger (~30\%) on large networks \cite{wang2019deep}.
-When the accuracy loss is acceptable, this approach massively accelerates computation, as the expensive FP32 matrix-vector product operations can be replaced with an XNOR and POPCOUNT\cite{courbariaux2016binarynet}.
+In BinaryNet, for all layers except the first, weights and activation are quantised to $\{-1,
+1\}$, represented with unset and set bits respectively.
+Surprisingly, authors note only a small accuracy loss on small
+networks\cite{courbariaux2016binarynet}, but a much larger (~30\%) on large networks
+\cite{wang2019deep}.
+When the accuracy loss is acceptable, this approach massively accelerates computation,
+as the expensive FP32 matrix-vector product operations can be replaced with an XNOR and
+POPCOUNT\cite{courbariaux2016binarynet}.
 The benefits are especially visible in flexible architectures (ASIC/FPGA).
 The accuracy loss can be compensated for by expanding the binarized network.
-Umuroglu at al. speculate BNNs need to be expanded 2-11x to eliminate accuracy loss \cite{umuroglu2016finn},
-but use MNIST as the experimental dataset, which does not capture the more significant accuracy loss for large networks.
+Umuroglu at al. speculate BNNs need to be expanded 2-11x to eliminate accuracy loss
+\cite{umuroglu2016finn},
+but use MNIST as the experimental dataset, which does not capture the more significant accuracy
+loss for large networks.
 
-Notably, binarized neurons are unable do deactivate. Ternarisation overcomes this by quantising values to $\{-1, 0, 1\}$.
-Another notable variation is Trained Ternary Weights, where we learn a weight $w$ from data, and quantise to $\{-w, 0 ,w\}$.
+Notably, binarized neurons are unable to deactivate. Ternarisation overcomes this by quantising
+values to $\{-1, 0, 1\}$.
+Another notable variation is Trained Ternary Weights, where we learn a weight $w$ from data,
+and quantise to $\{-w, 0 ,w\}$.
 This approach can naturally be extended to arbitrary-bitwidth quantisation.
 
 In Fine Grained Quantisation, we choose different quantisation for different parts of the network.
-Ideally, we could quantise each weight/activation with the best ratio of performance benefit to accuracy loss,
+Ideally, we could quantise each weight/activation with the best ratio of performance benefit
+to accuracy loss,
 but this significantly complicates the architectures.
-Instead \cite{wu2016quantized} paritions the network into a number of quantisation domains with kmeans.
+Instead \cite{wu2016quantized} paritions the network into a number of quantisation domains
+with kmeans.
 
-Authors of LogNet\cite{lee2017lognet} use logarithmically quantised 4bit weights to drastically outperform the usual, linearly quantised alternative.
-This suggest the maximum expressible range of an activation is more important than precision in preserving DCNN performance.
+Authors of LogNet\cite{lee2017lognet} use logarithmically quantised 4bit weights to drastically
+outperform the usual, linearly quantised alternative.
+This suggest the maximum expressible range of an activation is more important than precision
+in preserving DCNN performance.
 
 \subsubsection{Weight Reduction}
+In all of machine learning, regularisation is commonly applied to models to both stop overfitting
+and control computational cost.
+Pruning, in the simplest case, is an extension of this technique, where a network is trained
+with regularisation until some weights become 0, and then can be pruned away.
+Authors of \cite{guo2016dynamic} achieve an impressive 17.7 times compression on AlexNet,
+but the resulting network is much more complex, and in some cases even slower \cite{yu2017scalpel}.
+Moreover, simple magnitude-based pruning does not account for interactions between different
+weights.
+Authors of \cite{yu2017scalpel} address the hardware implementation problems by taking the
+target hardware parameters into account when pruning.
+Limitations of magnitude-based pruning are addressed in \cite{yang2017designing} by overpruning
+then re-introducing weights that reduce output error the most.
 
-\subsubsection{Input-Dependent Computation}
-
-
-
+<< I also want to discuss \cite{ullrich2017soft} here, which uses variational Bayesian learning
+to synthesise the other compression approaches.
+The paper itself is heavy on stats and information theory, and I need a lot more backgroud
+reading for it, so I'll leave it out for now >>
 \section{Problem Analysis}
 
 \section{Design and Implementation}
