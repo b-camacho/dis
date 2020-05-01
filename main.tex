@@ -25,7 +25,7 @@
 
 \section{Literature Review}
 The chapter begins with an overview of state of the art Facial Recognition methods, including
-a brief explanation of general Computer Vision and Facial Recognition.
+a brief explanation of general Computer Vision.
 Then, Neural Network approximation and Artificial Intelligence acceleration techniques are
 discussed, with a focus on Convolutional Neural Networks and Field-Programmable Gate Arrays. This
 includes an  examination of benchmarking methods, and mostly discusses improvements to inference,
@@ -36,21 +36,23 @@ Computer Vision, that is, using software to recognise objects in images, is a di
 problem. Image data is unstructured, high-dimensional and subtle differences in pixel values
 can completely change the object represented\cite{prince2012computer}.
 Historically, distilling information from such data required experts to craft complex feature
-extractors, which generalised poorly to a large number of classes.
+extractors. Lowe\cite{lowe2004distinctive} proposes a method for identifying keypoints in an image
+invariant to scale, rotation and illumination.
+[note: could not find a source for the generalisability claim]
 
 \subsubsection{Convolutional Neural Networks}
 The seminal 2012 paper by Kirzhevsky et al. used Convolutional Neural Network to achieve an mAP
 of 16\% in the Imagenet Large Scale Visual Recognition Challenge, compared to the second-best
 submission with an mAP of 26\%\cite{ILSVRC15}.
 CNNs have since become the standard in computer vision tasks \cite{sze2017efficient}, including
-Facial Recognition.
+Facial Recognition (FR).
 Usual network architectures start with a number of Convolutional, Pooling and Activation layers
 which serve as feature extractors and turn a vector $v \in R^{W\times H}$, representing a
 $W\times H$ image, into an internal vector embedding $x \in R^D$, where $D << WxH$, followed
 by a final regression/classification layer.
 
 \subsubsection{Facial Recognition}
-If our goal is only recognising faces known at training time, Facial Recognition simplifies
+If our goal is only recognising faces known at training time, FR simplifies
 into a classification problem. This is called closed-set FR.
 The converse case is called open-set FR, where we work with identities which do not belong to
 the training set.
@@ -58,26 +60,29 @@ Not only is open-set FR more challenging, but also more applicable in practice
 \cite{liu2017sphereface}.
 In normal classification, the learned vector embeddings need only to be separable by the final
 classification (eg. softmax) layer.
-Open-set FR, however, embedding to also be discriminative --- where we can expect the nearest
+In open-set FR, however, embedding to also be discriminative --- where we can expect the nearest
 neighbour of an embedding to represent the same class. In other words, we need small intra-class
 distances and large inter-class distances\cite{deng2019arcface}.
 Parkhi et al\cite{parkhi2015deep} tackle this by treating initial CONV layers as a feature
 extractor, and then replacing the softmax classifier head with a regression head based on
 $(x_{Anchor}, x_{Positive}, x_{Negative})$ embedded face triplets, with loss $\Loss$ $$\Loss =
 max(0, |x_{Anchor} - x_{Positive}| - |x_{Anchor} - x_{Negative}|)$$
-Authors of SphereFace\cite{liu2017sphereface} take a different approach to the same problem,
+Liu et al. \cite{liu2017sphereface} take a different approach to the same problem,
 by defining an Angular Softmax function, encouraging a discriminative distribution of classes,
 with an adjustable margin hyperparameter $m$.
 Given 2 weight vectors $W_1, W_2$, and the angle between them $\theta$, we can enforce an
 angular margin of $\frac{m-1}{m+1}\theta$ \cite{li2018angular}.
-Finally, Deng et. al synthesise different margin incorporating loss functions, producing
-state of the art results with an additive (as opposed to multiplicative in SphereFace)
-penalty\cite{deng2019arcface}.
+Finally, Deng et. al synthesise different margin incorporating loss functions, 
+penalizing the reward with $(cos(m_1\theta + m_2) - m_3)$, where the coefficients $m_{1..3}$
+represent penalties used in SphereFace, ArcFace and CosFace, and can be adjusted as hyperparameters.
+In experiments, however, the combined approach did not perform better
+than only using the additive angular margin penalty\cite{deng2019arcface}.
+
 
 \subsection{Deep Neural Network Acceleration}
 \subsubsection{Roofline Model}
-The Roofline Model is used in benchmarking deep neural networks in a way that generalised well
-to real-world applications.
+The Roofline Model (RM) is used in benchmarking deep neural networks in a way that generalised well
+to real-world applications\cite{umuroglu2016finn}.
 Attainable performance $P$ is expressed as $$P = min(\pi, \beta * I)$$ where $\pi$, $\beta$
 and $I$ represent peak compute power, peak bandwidth and operational intensity, respectively.
 RM accurately represents performanece being either compute- or memory-bound, where additional
@@ -88,8 +93,9 @@ For instance by reusing parameters in different layers, we can improve performan
 process is memory bound.
 
 \subsubsection{Training vs Inference}
-Like all ML methods, DNNs have to be trained on data before they can be used in inference. Training
-is composed of 2 stages --- Forward and Backward propagation.
+Like all ML methods, DNNs have to be trained on data before they can be used in inference.
+[note: although it seems like a truism, I struggle to find a reference for this, would you have any advice?]
+Training is composed of 2 stages --- Forward and Backward propagation.
 In forward propagation, the input vector $x$ is transformed by layers $L_1, L_2,..., L_n$
 in sequence,
 then compared to target $y$ to compute loss $\Loss$:
@@ -108,6 +114,7 @@ are computed ahead of time as:
     L_{i+1}}{\partial W_i}
 \end{split}
 \end{gather}
+In the backward propagation step, we use symbolic gradients to find optimal weight updates.
 Importantly, the symbolic gradients have to be evaluated at their respective inputs which,
 in turn, need to be stored during forward propagation.
 In inference, however, only forward propagation is computed, and there is no need to store
@@ -151,6 +158,9 @@ diminishes when $W_k, H_k << W_i, H_i$\cite{liu2016pruning}.
 The Winograd convolution addresses this, outperforming FFT on small kernels.
 The 2 approaches can be synthesised in a single network, applying Winograd/FFT to different
 convolutional layers depending on kernel size \cite{zhuge2018face}
+Both of these approaches vastly outperform naive convolution, indicating even a potentially faster 
+accelerator will striggle to outperform existing solutions, if it uses the naive implementation
+of convolution.
 
 Spatial factorisation has been used to drastically improve efficiency of convolution kernels,
 for instance the edge-detecting Sobel kernel.
@@ -167,7 +177,9 @@ The resulting intermediate feature map is then pointwise convolved with $D$ $1 \
 C$ kernels.
 Space and compute savings here stem from reusing the same $W_k \times H_k \times 1$ kernel for
 all of the pointwise kernels.
-This approach was introduced in \cite{howard2017mobilenets} and achieved state of the art results.
+This approach was introduced in \cite{howard2017mobilenets} and achieved state of the art results
+in compressing DNNs. Notably, this approach is more straightforward than Winograd or FFT
+based approaches, and could potentially be implemented within the project's constraints.
 
 \subsubsection{Block Floating Point}
 The IEEE 754 Floating Point representation uses 8 exponent bits to represent the position of
@@ -180,7 +192,7 @@ In training, most DCNNs use 32 Floating Point numbers to represent weights, acti
 Not all of this precision is needed in a forward pass, however.
 In BinaryNet, for all layers except the first, weights and activation are quantised to $\{-1,
 1\}$, represented with unset and set bits respectively.
-Surprisingly, authors note only a small accuracy loss on small
+Surprisingly, Wang et. al. note only a small accuracy loss on small
 networks\cite{courbariaux2016binarynet}, but a much larger (~30\%) on large networks
 \cite{wang2019deep}.
 When the accuracy loss is acceptable, this approach massively accelerates computation,
@@ -188,7 +200,7 @@ as the expensive FP32 matrix-vector product operations can be replaced with an X
 POPCOUNT\cite{courbariaux2016binarynet}.
 The benefits are especially visible in flexible architectures (ASIC/FPGA).
 The accuracy loss can be compensated for by expanding the binarized network.
-Umuroglu at al. speculate BNNs need to be expanded 2-11x to eliminate accuracy loss
+Umuroglu at al. speculate Binary Nets need to be expanded 2-11x to eliminate accuracy loss
 \cite{umuroglu2016finn},
 but use MNIST as the experimental dataset, which does not capture the more significant accuracy
 loss for large networks.
@@ -229,12 +241,100 @@ comment: I also want to discuss \cite{ullrich2017soft} here, which uses variatio
 to synthesise the other compression approaches.
 The paper itself is heavy on stats and information theory, and I need a lot more backgroud
 reading for it, so I'll leave it out for now 
-\section{Problem Analysis}
 
-\section{Design and Implementation}
+\section{Method}
+The goal of the project is accelerating FR by performing omputations in FPGA,
+inspired by the real world problem of performing FR on edge devices with scarce computational
+resources.
 
+Under these conditions, using closed-set FR seemed unrealistic, as retraining the model to take
+into account new indentities would be infeasible in practice. Additionally, obtaining
+enough samples for a given identity to use closed-set FR would be cumbersome.
+
+I chose the open-set approach, despite the added difficulties described in section \ref{Facial Recognition}.
+
+Quantisation is a very effective way of accelerating neural networks, especially when 
+arbitrary-precision computation hardware can be leveraged, as is the case with FPGA.
+I decided I would focus the project on quantisation because of this, but also because
+it posed an interesting problem when applied to open-set FR. As mentioned in \ref{Facial Recognition},
+we would not be training a classifier (as is usually the case with acceleration examples) but an
+encoder that produced discriminative embeddings. Intuition would suggest quantisation, 
+by reducing the number of represantable vectors (sometimes drastically), would impact the 
+encoder differently than it would classifier.
+
+The high level steps to achieve the objectives are:
+\begin{enumerate}
+	\item Design and train a standard (FP32) CNN
+	\item Quantise parts of the network, observe accuracy loss
+	\item Iterate the steps above until an acceptable network is found
+	\item Synthesise hardware based on the quantised network
+	\item Validate and benchmark the FPGA-accelerated model
+\end{enumerate}
+
+\subsection{Training and software quantisation}
+The ecosystem for training standard CNNs is very mature, with multiple frameworks available
+and seeing wide adoption in both academia and industry. I decided to use PyTorch, one 
+of those frameworks that had the benefit of quantisation-aware training, an experimental 
+feature where the objective function for backpropagation was computed as if the network
+was already quantised, meaning the network had a chance to adapt to the eventual quantisation
+during training.
+
+\subsubsection{Dataset}
+The network was trained on the VGG dataset [todo: describe and justify this further]
+
+\subsection{Hardware Synthesis}
+Over the course of the project, a number of synthesis approaches were evaluated.
+\subsubsection{Python-to-netlist}
+Python-to-netlist frameworks are a class of frameworks that allow hardware synthesis from a 
+NN description in Python, or an intermediate description closely coupled to python (including
+TensorFlow graph or Open Neural Network Exchange).
+This type of synthesis is very lucrative, as it automates the difficult step of creating a hardware design.
+As opposed to NN frameworks in general, python-to-netlist synthesis is a very experimental area,
+with multiple projects undergoing aggressive development, and finding a working solution proved
+very difficult. A brief overview of surveyed methods is given below.
+
+TVM is an Apache project aiming to compile neural networks to an interchangable itnernal representation,
+that could be executed in a variety of environments including LLVM, GPU and VTA --- the project's own
+hardware accelerator IP. Unfortunately, there is no way to fine-tune IP to the model being compiled.
+Instead, the project uses a set of standard processing units that have different weights loaded into them.
+Being able to take advantage of the model's structure being reflected in the IP design was one of the crucial 
+benefits of using FPGA, so I decided against using this framework.
+
+BNN-PYNQ is a framework for running custom quantised neural networks, specifically made for the PYNQ
+device series. Although initially promising, the synthesis process is tightly coupled to the synthesis ---
+the model would have to be completely defined through this framework. This would be acceptable, however the 
+highly customised training implementation used here produced unacceptably long training times (over 24 hours
+for the tiny MNIST dataset). Effectively iterating on the design would not have been possible with training times at this order of magnitude.
+
+
+\subsection{Network Architecture}
 \section{Evaluation}
+There are two broad classes of measurable objectives in the project - accuracy and performance.
+A less accurate algorithm may be preferrable if it is more performant, depending on both
+the application and how much is lost or gained. The project aims to explore these tradeoffs.
+\subsection{Latency and throughput}
+Model performance can be further divided into latency and throughput. The former describes the time 
+between a model being fed an image and the model making a final prediction. The latter, in turn, is concerned
+with the number of images processed per unit of time.
 
+On the surface, the metrics seem closely related --- the "critical path" of data through a 
+system seems to completely determine both. However, a highly sequential computation can still be 
+performed with high through put with the use of pipelining.
+
+Pipelining is a technique used abuntantly in CPUs, where multiple inputs (instructions) are processed
+at the same time, as some steps need to be done by different hardware components in sequence for each 
+input. With pipelining, we achieve higher resource utilisation by processing multiple inputs
+at the same time, each one at a different stage.
+
+\subsection{Benchmarking}
+The question "does a change improve or worsen performance" is not easy to answer without empirically
+testing and comparing against a know baseline. Even changes like using multiple CPU cores may 
+actually worsen performance by introducing overhead, for eaxmple from thread synchronisation.
+The final results will be presented as percentage differences from a CPU-based baseline.
+
+\subsection{Accuracy}
+For measuring accuracy, the very popular VGG Face dataset will be used, as 
+it is both very common in publications and easy to use.
 \section{Conclusion}
 \bibliography{bibliography}
 \bibliographystyle{ieeetr}
